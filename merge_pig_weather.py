@@ -12,6 +12,8 @@ import pandas as pd
 PIG_PATH = Path("/workspace/pig_farm_7_2024.xlsx")
 WEATHER_PATH = Path("/workspace/weather data 7.xlsx")
 PIG_SHEET = "pig_farm_7_2024"
+CSV_OUT = Path("/workspace/merged_pig_weather.csv")
+XLSX_OUT = Path("/workspace/merged_pig_weather.xlsx")
 
 
 def build_pig_timestamp(df: pd.DataFrame) -> pd.DataFrame:
@@ -55,10 +57,10 @@ def load_and_resample_weather() -> pd.DataFrame:
 	numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
 	non_numeric_cols = [c for c in df.columns if c not in numeric_cols and c != "time"]
 	# Resample numeric to 30-minute with time interpolation
-	df_num_30 = df[numeric_cols].resample("30T").interpolate(method="time") if numeric_cols else pd.DataFrame(index=pd.date_range(df.index.min(), df.index.max(), freq="30T"))
+	df_num_30 = df[numeric_cols].resample("30min").interpolate(method="time") if numeric_cols else pd.DataFrame(index=pd.date_range(df.index.min(), df.index.max(), freq="30min"))
 	# Resample non-numeric with forward fill/backfill
 	if non_numeric_cols:
-		df_nonnum_30 = df[non_numeric_cols].resample("30T").ffill().bfill()
+		df_nonnum_30 = df[non_numeric_cols].resample("30min").ffill().bfill()
 		weather_30 = pd.concat([df_num_30, df_nonnum_30], axis=1)
 	else:
 		weather_30 = df_num_30
@@ -80,6 +82,12 @@ def main() -> None:
 	print(list(merged.columns))
 	print("\nPreview (first 10 rows):")
 	print(merged.head(10).to_string())
+
+	# Export to CSV and Excel (include timestamp as a column)
+	merged_out = merged.reset_index()
+	merged_out.to_csv(CSV_OUT, index=False)
+	merged_out.to_excel(XLSX_OUT, index=False)
+	print(f"\nSaved merged dataset to: {CSV_OUT} and {XLSX_OUT}")
 
 
 if __name__ == "__main__":
