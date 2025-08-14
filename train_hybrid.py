@@ -202,20 +202,28 @@ def main() -> None:
 	mse = mean_squared_error(y_test_aligned, final_pred_test.loc[y_test_aligned.index])
 	rmse = math.sqrt(mse)
 	mape = (np.abs((y_test_aligned - final_pred_test.loc[y_test_aligned.index]) / y_test_aligned).replace([np.inf, -np.inf], np.nan).dropna()).mean() * 100
+	# R^2
+	ss_tot = ((y_test_aligned - y_test_aligned.mean()) ** 2).sum()
+	ss_res = ((y_test_aligned - final_pred_test.loc[y_test_aligned.index]) ** 2).sum()
+	r2 = float('nan') if ss_tot == 0 else 1 - ss_res / ss_tot
 
 	print("\nHybrid model performance on test subset:")
 	print(f"MAE:  {mae:.3f}")
 	print(f"RMSE: {rmse:.3f}")
 	print(f"MAPE: {mape:.2f}%")
+	print(f"R2:   {r2:.4f}")
 
 	# Compare to SARIMAX alone
 	yhat_sarimax_only = sarimax_pred_test.loc[y_test_aligned.index]
 	mse_sarimax = mean_squared_error(y_test_aligned, yhat_sarimax_only)
 	rmse_sarimax = math.sqrt(mse_sarimax)
 	mae_sarimax = mean_absolute_error(y_test_aligned, yhat_sarimax_only)
+	ss_res_s = ((y_test_aligned - yhat_sarimax_only) ** 2).sum()
+	r2_s = float('nan') if ss_tot == 0 else 1 - ss_res_s / ss_tot
 	print("\nSARIMAX-only benchmark on same period:")
 	print(f"MAE:  {mae_sarimax:.3f}")
 	print(f"RMSE: {rmse_sarimax:.3f}")
+	print(f"R2:   {r2_s:.4f}")
 
 	# Feature importances (top 10)
 	importances = xgb.feature_importances_
