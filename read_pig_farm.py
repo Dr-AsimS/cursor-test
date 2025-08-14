@@ -27,7 +27,9 @@ def _read_with_pandas(excel_path: Path) -> None:
 
 
 def _read_with_openpyxl(excel_path: Path) -> None:
+	from datetime import timedelta
 	from openpyxl import load_workbook  # type: ignore
+	from openpyxl.utils.datetime import from_excel as excel_from_serial  # type: ignore
 
 	workbook = load_workbook(filename=str(excel_path), read_only=True, data_only=True)
 	sheet_names = workbook.sheetnames
@@ -48,10 +50,42 @@ def _read_with_openpyxl(excel_path: Path) -> None:
 	for column_index, column_name in enumerate(header or [], start=1):
 		print(f"  - c{column_index}: {column_name}")
 
+	# Try to locate Date and Time columns
+	date_idx = None
+	time_idx = None
+	if header is not None:
+		for idx, name in enumerate(header):
+			name_str = ("" if name is None else str(name)).strip().lower()
+			if name_str == "date":
+				date_idx = idx
+			elif name_str == "time":
+				time_idx = idx
+
 	print("\nPreview (first 10 data rows):")
 	row_count = 0
 	for row in rows_iter:
-		print("\t".join("" if cell is None else str(cell) for cell in row))
+		cells = list(row)
+
+		# Build a human-readable timestamp if possible
+		timestamp_display = None
+		try:
+			if date_idx is not None and time_idx is not None:
+				date_val = cells[date_idx]
+				time_val = cells[time_idx]
+				if isinstance(date_val, (int, float)) and isinstance(time_val, (int, float)):
+					date_dt = excel_from_serial(date_val, epoch=workbook.epoch)
+					time_td = excel_from_serial(time_val, epoch=workbook.epoch, timedelta=True)
+					timestamp_display = (date_dt + time_td).strftime("%Y-%m-%d %H:%M")
+		except Exception:
+			pass
+
+		# Print the row with optional timestamp prefix
+		row_text = "\t".join("" if cell is None else str(cell) for cell in cells)
+		if timestamp_display is not None:
+			print(f"{timestamp_display}\t{row_text}")
+		else:
+			print(row_text)
+
 		row_count += 1
 		if row_count >= 10:
 			break
