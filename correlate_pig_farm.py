@@ -34,6 +34,54 @@ def pearson_correlation(x_values: List[float], y_values: List[float]) -> Optiona
 	return numerator / denominator
 
 
+# Compute correlation ratio (eta) for categorical variable vs continuous target
+# Returns (eta, eta_squared, counts_by_category, means_by_category, n)
+# or None if insufficient data
+
+def correlation_ratio_with_stats(category_values: List[object], target_values: List[float]) -> Optional[Tuple[float, float, Dict[str, int], Dict[str, float], int]]:
+	if len(category_values) != len(target_values) or len(target_values) < 2:
+		return None
+
+	pairs: List[Tuple[str, float]] = []
+	for raw_cat, raw_target in zip(category_values, target_values):
+		if raw_cat is None or not is_number(raw_target):
+			continue
+		cat_key = str(raw_cat).strip()
+		if cat_key == "":
+			continue
+		pairs.append((cat_key, float(raw_target)))
+
+	n_total = len(pairs)
+	if n_total < 2:
+		return None
+
+	total_sum = 0.0
+	counts_by_category: Dict[str, int] = {}
+	sums_by_category: Dict[str, float] = {}
+	for cat_key, y_val in pairs:
+		counts_by_category[cat_key] = counts_by_category.get(cat_key, 0) + 1
+		sums_by_category[cat_key] = sums_by_category.get(cat_key, 0.0) + y_val
+		total_sum += y_val
+
+	if len(counts_by_category) < 2:
+		return None
+
+	overall_mean = total_sum / n_total
+	ss_between = 0.0
+	for cat_key, count in counts_by_category.items():
+		mean_k = sums_by_category[cat_key] / count
+		ss_between += count * (mean_k - overall_mean) ** 2
+
+	ss_total = sum((y_val - overall_mean) ** 2 for _, y_val in pairs)
+	if ss_total == 0:
+		return None
+
+	eta_squared = ss_between / ss_total
+	eta = math.sqrt(eta_squared)
+	means_by_category: Dict[str, float] = {cat_key: (sums_by_category[cat_key] / counts_by_category[cat_key]) for cat_key in counts_by_category}
+	return eta, eta_squared, counts_by_category, means_by_category, n_total
+
+
 def main() -> None:
 	excel_path = Path("/workspace/pig_farm_7_2024.xlsx")
 	if not excel_path.exists():
@@ -72,14 +120,11 @@ def main() -> None:
 		if col_name in name_to_index:
 			candidate_numeric_columns.append(col_name)
 
-	# Collect data pairs for correlation
+	# Collect data pairs for correlation (numeric features)
 	correlations: List[Tuple[str, Optional[float], int]] = []
 	for other_col in candidate_numeric_columns:
 		x_vals: List[float] = []  # Indoor temp
 		y_vals: List[float] = []  # Other variable
-		for row in rows_iter:
-			# rows_iter is consumed; so we must re-create it per column
-			pass
 		# Re-create the iterator for each variable
 		rows_iter_inner = sheet.iter_rows(values_only=True)
 		try:
@@ -104,7 +149,38 @@ def main() -> None:
 		else:
 			print(f"  - {var_name}: r = {corr:.4f} (n={n})")
 
-	print("\nNote: Categorical variables like 'Weather' and 'Control' are excluded. They require encoding (e.g., one-hot) or a different association measure (e.g., correlation ratio).")
+	# Associations for categorical features via correlation ratio (eta)
+	categorical_columns = [name for name in ("Weather", "Control") if name in name_to_index]
+	if categorical_columns:
+		print("\nAssociations with categorical variables (correlation ratio η):")
+		for cat_col in categorical_columns:
+			categories: List[object] = []
+			target_values: List[float] = []
+			rows_iter_inner = sheet.iter_rows(values_only=True)
+			try:
+				next(rows_iter_inner)
+			except StopIteration:
+				continue
+			for row in rows_iter_inner:
+				indoor_val = row[name_to_index[indoor_col]] if name_to_index[indoor_col] < len(row) else None
+				cat_val = row[name_to_index[cat_col]] if name_to_index[cat_col] < len(row) else None
+				if is_number(indoor_val) and cat_val is not None and str(cat_val).strip() != "":
+					categories.append(str(cat_val).strip())
+					target_values.append(float(indoor_val))
+
+			result = correlation_ratio_with_stats(categories, target_values)
+			if result is None:
+				print(f"  - {cat_col}: insufficient data")
+				continue
+			eta, eta_sq, counts_by_cat, means_by_cat, n_total = result
+			print(f"  - {cat_col}: η = {eta:.4f}, η² = {eta_sq:.4f} (n={n_total}, k={len(counts_by_cat)})")
+
+			# Show per-category means (sorted by mean, top 10)
+			sorted_cats = sorted(means_by_cat.items(), key=lambda kv: kv[1], reverse=True)
+			for cat_name, mean_val in sorted_cats[:10]:
+				print(f"      • {cat_name}: mean={mean_val:.2f} (n={counts_by_cat.get(cat_name, 0)})")
+
+	print("\nNote: η measures the strength of association between a categorical variable and the target. 0=no association, 1=perfect.")
 
 
 if __name__ == "__main__":
