@@ -142,17 +142,18 @@ def main() -> None:
 
 	print(f"Sheet: {sheet.title}")
 	print(f"Target: {indoor_col}")
-	print("Pearson correlation with numeric variables:")
-	for var_name, corr, n in correlations:
-		if corr is None:
-			print(f"  - {var_name}: insufficient or constant data (n={n})")
-		else:
-			print(f"  - {var_name}: r = {corr:.4f} (n={n})")
+	if False:
+		print("Pearson correlation with numeric variables:")
+		for var_name, corr, n in correlations:
+			if corr is None:
+				print(f"  - {var_name}: insufficient or constant data (n={n})")
+			else:
+				print(f"  - {var_name}: r = {corr:.4f} (n={n})")
 
 	# Associations for categorical features via correlation ratio (eta)
-	categorical_columns = [name for name in ("Weather", "Control") if name in name_to_index]
+	categorical_columns = [name for name in ("Weather",) if name in name_to_index]
 	if categorical_columns:
-		print("\nAssociations with categorical variables (correlation ratio η):")
+		print("\nAssociations with categorical variable 'Weather' (correlation ratio η):")
 		for cat_col in categorical_columns:
 			categories: List[object] = []
 			target_values: List[float] = []
@@ -175,9 +176,9 @@ def main() -> None:
 			eta, eta_sq, counts_by_cat, means_by_cat, n_total = result
 			print(f"  - {cat_col}: η = {eta:.4f}, η² = {eta_sq:.4f} (n={n_total}, k={len(counts_by_cat)})")
 
-			# Show per-category means (sorted by mean, top 10)
+			# Show per-category means (sorted by mean, all categories)
 			sorted_cats = sorted(means_by_cat.items(), key=lambda kv: kv[1], reverse=True)
-			for cat_name, mean_val in sorted_cats[:10]:
+			for cat_name, mean_val in sorted_cats:
 				print(f"      • {cat_name}: mean={mean_val:.2f} (n={counts_by_cat.get(cat_name, 0)})")
 
 	print("\nNote: η measures the strength of association between a categorical variable and the target. 0=no association, 1=perfect.")
